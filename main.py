@@ -5,6 +5,7 @@ Usage:
   python main.py                        # run all sources, write prospects.csv
   python main.py --no-hn                # skip Hacker News
   python main.py --no-enrich            # skip Hunter.io enrichment
+  python main.py --no-notion            # skip Notion push
   python main.py --out results.csv      # custom output file
   python main.py --dedupe existing.csv  # skip orgs already in a CSV
 """
@@ -29,7 +30,7 @@ log = logging.getLogger(__name__)
 # Local imports (after dotenv so env is ready)
 from config import GITHUB_QUERIES, HN_QUERIES, MIN_SCORE_THRESHOLD
 from sources import github_source, hn_source
-from enrichment import hunter_enricher
+from enrichment import hunter_enricher, notion_push
 from scoring import filter_and_rank
 
 OUTPUT_COLUMNS = [
@@ -91,6 +92,7 @@ def main():
     parser.add_argument("--no-github", action="store_true", help="Skip GitHub source")
     parser.add_argument("--no-hn", action="store_true", help="Skip Hacker News source")
     parser.add_argument("--no-enrich", action="store_true", help="Skip Hunter.io enrichment")
+    parser.add_argument("--no-notion", action="store_true", help="Skip Notion CRM push")
     parser.add_argument("--out", default=f"prospects_{date.today()}.csv", help="Output CSV path")
     parser.add_argument("--dedupe", default=None, help="Path to existing CSV; skip matching logins")
     args = parser.parse_args()
@@ -152,6 +154,14 @@ def main():
 
     # --- Output ---
     write_csv(ranked, args.out)
+
+    # --- Notion CRM push ---
+    if not args.no_notion:
+        notion_db_id = os.getenv("NOTION_DATABASE_ID", "35acd830bd3580d7aabffaae480073c4")
+        pushed, skipped = notion_push.push(ranked, db_id=notion_db_id)
+        print(f"Notion: {pushed} new prospects pushed, {skipped} duplicates skipped")
+    else:
+        log.info("Notion push: skipped")
 
     # Print summary table to terminal
     print(f"\n{'─'*80}")
