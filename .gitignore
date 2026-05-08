@@ -1,0 +1,23 @@
+# Environment — never commit tokens or keys
+.env
+*.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Output files — generated data, not source
+prospects_*.csv
+*.csv
+
+# macOS
+.DS_Store
