@@ -31,7 +31,14 @@ def _headers():
 
 def _get(url, params=None, retries=3):
     for attempt in range(retries):
-        resp = requests.get(url, headers=_headers(), params=params, timeout=15)
+        try:
+            resp = requests.get(url, headers=_headers(), params=params, timeout=15)
+        except requests.exceptions.Timeout:
+            log.warning(f"GitHub request timed out ({url[:60]}) — skipping")
+            return None
+        except requests.exceptions.RequestException as e:
+            log.warning(f"GitHub request failed: {e} — skipping")
+            return None
         if resp.status_code == 403 and "rate limit" in resp.text.lower():
             reset = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
             wait = max(reset - int(time.time()), 1)
