@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 
 # Local imports (after dotenv so env is ready)
 from config import GITHUB_QUERIES, HN_QUERIES, MIN_SCORE_THRESHOLD
-from sources import github_source, hn_source
+from sources import github_source, hn_source, producthunt_source
 from enrichment import hunter_enricher, notion_push
 from scoring import filter_and_rank
 
@@ -91,6 +91,7 @@ def main():
     parser = argparse.ArgumentParser(description="Prospect sourcing for AI RLHF buyers")
     parser.add_argument("--no-github", action="store_true", help="Skip GitHub source")
     parser.add_argument("--no-hn", action="store_true", help="Skip Hacker News source")
+    parser.add_argument("--no-ph", action="store_true", help="Skip Product Hunt source")
     parser.add_argument("--no-enrich", action="store_true", help="Skip Hunter.io enrichment")
     parser.add_argument("--no-notion", action="store_true", help="Skip Notion CRM push")
     parser.add_argument("--out", default=f"prospects_{date.today()}.csv", help="Output CSV path")
@@ -118,6 +119,14 @@ def main():
         log.info(f"HN: {len(hn_prospects)} prospects collected")
     else:
         log.info("HN: skipped")
+
+    # --- Product Hunt ---
+    if not args.no_ph:
+        ph_prospects = producthunt_source.run(days_back=30, max_results=50)
+        all_prospects.extend(ph_prospects)
+        log.info(f"Product Hunt: {len(ph_prospects)} prospects collected")
+    else:
+        log.info("Product Hunt: skipped")
 
     if not all_prospects:
         log.warning("No prospects collected. Check your API keys and network.")

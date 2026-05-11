@@ -49,7 +49,7 @@ def _ensure_outreach_schema(db_id, token):
 
 
 def _get_page_ids_by_website(db_id, token):
-    """Return dict mapping website URL → Notion page ID."""
+    """Return dict mapping website URL → (page_id, outreach_status)."""
     mapping = {}
     cursor = None
     while True:
@@ -66,9 +66,12 @@ def _get_page_ids_by_website(db_id, token):
             break
         data = r.json()
         for page in data.get("results", []):
-            url = page.get("properties", {}).get("Website", {}).get("url")
+            props = page.get("properties", {})
+            url = props.get("Website", {}).get("url")
+            status = (props.get("Outreach Status") or {}).get("select", {})
+            status_name = status.get("name") if status else None
             if url:
-                mapping[url.lower().rstrip("/")] = page["id"]
+                mapping[url.lower().rstrip("/")] = (page["id"], status_name)
         if not data.get("has_more"):
             break
         cursor = data.get("next_cursor")
@@ -105,9 +108,15 @@ def push_drafts(results, db_id=None, token=None):
             continue
 
         website = (prospect.get("website") or "").lower().rstrip("/")
-        page_id = page_map.get(website)
-        if not page_id:
+        record = page_map.get(website)
+        if not record:
             log.warning(f"No Notion page found for {prospect.get('name')} ({website}) — skipping")
+            skipped += 1
+            continue
+
+        page_id, existing_status = record
+        if existing_status == "Draft Ready":
+            log.debug(f"  skipping {prospect.get('name')} — draft already exists")
             skipped += 1
             continue
 
