@@ -17,7 +17,12 @@ build/
 
 # Output files — generated data, not source
 prospects_*.csv
+outreach_*.csv
 *.csv
 
 # macOS
 .DS_Store
+logs/
+
+# Generated digest output
+digest_*.md
