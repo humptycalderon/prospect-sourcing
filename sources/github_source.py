@@ -80,10 +80,15 @@ def fetch_org_details(login, account_type):
     }
 
 
-def search_repos(query, max_results=30):
-    """Search GitHub repos and return list of repo records."""
+def search_repos(query, max_results=30, orgs_only=True):
+    """Search GitHub repos and return list of repo records.
+    orgs_only=True filters to Organization-owned repos only — better
+    contact surface for Hunter.io enrichment downstream.
+    """
+    # Append GitHub qualifier to bias results toward org-owned repos
+    full_query = f"{query} fork:false" + (" org:*" if not orgs_only else "")
     params = {
-        "q": query,
+        "q": full_query,
         "sort": "updated",
         "order": "desc",
         "per_page": min(max_results, 30),
@@ -94,17 +99,20 @@ def search_repos(query, max_results=30):
 
     repos = []
     for item in data.get("items", []):
+        owner_type = item["owner"]["type"]  # "Organization" | "User"
+        if orgs_only and owner_type != "Organization":
+            continue
         repos.append({
-            "repo_name": item.get("full_name"),
+            "repo_name":       item.get("full_name"),
             "repo_description": item.get("description") or "",
-            "topics": item.get("topics", []),
-            "stars": item.get("stargazers_count", 0),
-            "last_pushed": item.get("pushed_at"),
+            "topics":          item.get("topics", []),
+            "stars":           item.get("stargazers_count", 0),
+            "last_pushed":     item.get("pushed_at"),
             "days_since_push": _days_since(item.get("pushed_at")),
-            "owner_login": item["owner"]["login"],
-            "owner_type": item["owner"]["type"],  # "Organization" | "User"
+            "owner_login":     item["owner"]["login"],
+            "owner_type":      owner_type,
         })
-        time.sleep(0.1)  # stay well under rate limits
+        time.sleep(0.1)
 
     return repos
 
