@@ -49,7 +49,8 @@ def _markdown_to_telegram(text):
         elif stripped.startswith(("- ", "* ", "• ")):
             lines.append(f"• {stripped[2:]}")
         elif re.match(r"^\d+\.\s", stripped):
-            lines.append(f"• {re.sub(r'^\\d+\\.\\s', '', stripped)}")
+            bullet_text = re.sub(r"^\d+\.\s", "", stripped)
+            lines.append(f"• {bullet_text}")
         else:
             lines.append(line)
     return "\n".join(lines)

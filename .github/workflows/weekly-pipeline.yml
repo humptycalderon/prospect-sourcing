@@ -5,6 +5,9 @@ on:
     - cron: '0 10 * * 1'   # 6:00 AM EDT (UTC-4) every Monday
   workflow_dispatch:         # allows manual trigger from GitHub UI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
 
   # ── Job 1: Prospect Sourcing (6:00 AM EDT) ──────────────────────────────
