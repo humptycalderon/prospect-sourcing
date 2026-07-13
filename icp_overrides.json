@@ -1,9 +1,13 @@
 {
   "_comment": "Weekly ICP overrides managed by the Telegram approval bot. Merged with config.py at runtime.",
   "_last_updated": "2026-07-13",
-  "_update_reason": "User approved recommended updates as-is",
-  "extra_github_queries": [],
-  "extra_hn_queries": [],
+  "_update_reason": "construction AI teams building ad hoc eval pipelines per r/MachineLearning",
+  "extra_github_queries": [
+    "construction AI model evaluation"
+  ],
+  "extra_hn_queries": [
+    "construction ML evaluation"
+  ],
   "extra_description_keywords": {},
   "extra_intent_keywords": {},
   "min_score_override": null
