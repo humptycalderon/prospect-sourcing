@@ -49,12 +49,17 @@ async function getFileWithSha(env, path) {
       Authorization: `Bearer ${env.GITHUB_TOKEN}`,
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "onto-icp-bot/1.0",
     },
   });
   if (!resp.ok) return null;
-  const data = await resp.json();
-  const content = atob(data.content.replace(/\n/g, ""));
-  return { content, sha: data.sha };
+  try {
+    const data = await resp.json();
+    const content = atob(data.content.replace(/\n/g, ""));
+    return { content, sha: data.sha };
+  } catch (e) {
+    return null;
+  }
 }
 
 async function updateFile(env, path, newContent, sha, message) {
@@ -67,6 +72,7 @@ async function updateFile(env, path, newContent, sha, message) {
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
       "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "onto-icp-bot/1.0",
     },
     body: JSON.stringify({ message, content: encoded, sha }),
   });
@@ -82,6 +88,7 @@ async function triggerWorkflow(env) {
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
       "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "onto-icp-bot/1.0",
     },
     body: JSON.stringify({ ref: "main" }),
   });
