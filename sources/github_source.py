@@ -72,6 +72,7 @@ def fetch_org_details(login, account_type):
         "description": data.get("description") or data.get("bio") or "",
         "website": data.get("blog") or data.get("html_url", ""),
         "location": data.get("location") or "",
+        "company": data.get("company") or "",
         "public_repos": data.get("public_repos", 0),
         "followers": data.get("followers", 0),
         "github_url": data.get("html_url"),
@@ -100,8 +101,11 @@ def search_repos(query, max_results=30, orgs_only=True):
     repos = []
     for item in data.get("items", []):
         owner_type = item["owner"]["type"]  # "Organization" | "User"
+        # Keep all orgs; keep individual users only as candidates (filtered later by follower count)
         if orgs_only and owner_type != "Organization":
             continue
+        if not orgs_only and owner_type == "User":
+            pass  # follower count checked after fetch_org_details
         repos.append({
             "repo_name":       item.get("full_name"),
             "repo_description": item.get("description") or "",
@@ -119,9 +123,12 @@ def search_repos(query, max_results=30, orgs_only=True):
 
 def run(queries, max_per_query=30):
     """
-    Run all queries, collect unique orgs, enrich with org details.
+    Run all queries, collect unique orgs and high-signal individual users.
 
-    Returns list of dicts keyed by org login.
+    Orgs: all included.
+    Users: included only if followers >= 200 (influential practitioners/researchers).
+
+    Returns list of dicts keyed by org/user login.
     """
     seen_logins = set()
     repo_map = {}  # login -> list of repos (for signal aggregation)
@@ -129,7 +136,7 @@ def run(queries, max_per_query=30):
     log.info(f"GitHub: running {len(queries)} queries …")
     for query in queries:
         log.info(f"  Searching: '{query}'")
-        repos = search_repos(query, max_results=max_per_query)
+        repos = search_repos(query, max_results=max_per_query, orgs_only=False)
         log.info(f"    → {len(repos)} repos")
         for repo in repos:
             login = repo["owner_login"]
@@ -145,6 +152,11 @@ def run(queries, max_per_query=30):
         account_type = repos[0]["owner_type"]
         details = fetch_org_details(login, account_type)
         if not details:
+            continue
+
+        # Filter individual users: only keep those with meaningful following (influential practitioners)
+        if account_type == "User" and details.get("followers", 0) < 200:
+            log.debug(f"  skipping user {login} (followers: {details.get('followers', 0)} < 200)")
             continue
 
         # Aggregate signals across all repos found for this org

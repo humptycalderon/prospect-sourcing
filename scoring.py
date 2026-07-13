@@ -9,6 +9,7 @@ from config import (
     HIGH_SIGNAL_TOPICS,
     SUPPORTING_TOPICS,
     DESCRIPTION_KEYWORDS,
+    INTENT_KEYWORDS,
     SCORE_WEIGHTS,
     MAX_SCORE,
     MIN_SCORE_THRESHOLD,
@@ -27,6 +28,23 @@ def _keyword_score(text):
         if kw in text_lower:
             total += weight
     return total
+
+
+def _intent_score(text):
+    """
+    Score production-use intent keywords in repo descriptions.
+    Returns (pts, matched_keywords). Capped at 10 pts total.
+    """
+    if not text:
+        return 0, []
+    text_lower = text.lower()
+    matched = []
+    pts = 0
+    for kw, weight in INTENT_KEYWORDS.items():
+        if kw in text_lower:
+            matched.append(kw)
+            pts += weight
+    return min(pts, 10), matched
 
 
 def score_prospect(p):
@@ -102,6 +120,25 @@ def score_prospect(p):
         bonus = min(qc * 3, 15)
         raw += bonus
         reasons.append(f"matched {qc} queries: +{bonus}")
+
+    # Intent signals: production-use keywords in repo descriptions
+    intent_pts, intent_kws = _intent_score(
+        " ".join([p.get("description") or "", p.get("repo_descriptions") or ""])
+    )
+    if intent_pts:
+        raw += intent_pts
+        reasons.append(f"intent keywords ({', '.join(intent_kws)}): +{intent_pts}")
+
+    # Recency penalty: stale repos score progressively lower
+    if days > 365:
+        raw = round(raw * 0.50)
+        reasons.append(f"stale repo ({days}d): score halved")
+    elif days > 180:
+        raw = round(raw * 0.70)
+        reasons.append(f"stale repo ({days}d): -30%")
+    elif days > 90:
+        raw = round(raw * 0.85)
+        reasons.append(f"aging repo ({days}d): -15%")
 
     # Normalize to 0–100
     score = min(round((raw / MAX_SCORE) * 100), 100)

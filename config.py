@@ -124,6 +124,22 @@ HN_TAGS = ["story", "comment"]
 # Minimum HN post points to include (filters noise)
 HN_MIN_POINTS = 5
 
+# Keywords that signal production/real-org use rather than academic/hobbyist work.
+# Scanned in repo descriptions. Each match adds SCORE_WEIGHTS["intent_signal"] pts, capped at 10.
+INTENT_KEYWORDS = {
+    "production":        2,
+    "deploy":            2,
+    "pipeline":          2,
+    "at scale":          2,
+    "enterprise":        2,
+    "human eval":        3,
+    "annotation":        2,
+    "labeling":          2,
+    "quality assurance": 2,
+    "evaluate":          2,
+    "benchmark":         2,
+}
+
 # --- Scoring weights ---
 SCORE_WEIGHTS = {
     "high_signal_topic_match": 15,   # per matching topic
@@ -134,10 +150,11 @@ SCORE_WEIGHTS = {
     "is_org": 8,                     # GitHub org (vs personal account)
     "multiple_repos": 5,             # org has >3 repos (real company)
     "hn_source": 12,                 # found on HN discussing the pain point
+    "intent_signal": 2,              # per production-use keyword match, capped at 10
 }
 
 # Max total score (used to normalize to 0–100)
 MAX_SCORE = 100
 
 # Minimum score to include in output
-MIN_SCORE_THRESHOLD = 20
+MIN_SCORE_THRESHOLD = 40

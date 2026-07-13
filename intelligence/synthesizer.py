@@ -107,6 +107,83 @@ but worth monitoring for next week.
 Keep the whole briefing under 800 words. Be specific and actionable."""
 
 
+RECOMMENDATIONS_PROMPT = """You are a growth strategist for an AI data platform. You just read this week's market intelligence briefing.
+
+Your job: identify concrete updates to our prospect sourcing search criteria based on what the market is signaling this week.
+
+CURRENT SEARCH QUERIES (do not suggest these again):
+GitHub: {github_queries}
+HN: {hn_queries}
+
+CURRENT DESCRIPTION KEYWORDS (do not suggest these again):
+{existing_keywords}
+
+THIS WEEK'S BRIEFING:
+{briefing}
+
+---
+
+Based on the briefing, generate a JSON object with recommended updates. Respond with ONLY valid JSON, no markdown, no explanation:
+
+{{
+  "extra_github_queries": ["query 1", "query 2"],
+  "extra_hn_queries": ["query 1"],
+  "extra_description_keywords": {{"keyword phrase": weight_integer}},
+  "extra_intent_keywords": {{"keyword phrase": weight_integer}},
+  "_update_reason": "one sentence explaining what market signal drove these recommendations"
+}}
+
+Rules:
+- Only add queries/keywords that are clearly supported by this week's signals
+- GitHub query weights: 3–10 (match DESCRIPTION_KEYWORDS scale)
+- Intent keyword weights: 2–3
+- Leave any array or object empty if there is no strong signal to justify additions
+- The _update_reason should name the specific signal (e.g. "construction AI teams building ad hoc eval pipelines per r/MachineLearning thread")
+- Return ONLY the JSON object, nothing else"""
+
+
+def generate_recommendations(briefing, github_queries, hn_queries, existing_keywords, api_key=None):
+    """
+    Read the synthesized briefing and recommend concrete ICP search criteria updates.
+    Returns a dict ready to merge into icp_overrides.json, or None on failure.
+    """
+    import json
+    api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        log.error("ANTHROPIC_API_KEY not set — cannot generate recommendations")
+        return None
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    prompt = RECOMMENDATIONS_PROMPT.format(
+        github_queries="\n".join(f"  - {q}" for q in github_queries),
+        hn_queries="\n".join(f"  - {q}" for q in hn_queries),
+        existing_keywords="\n".join(f"  - {k}" for k in list(existing_keywords.keys())[:40]),
+        briefing=briefing[:3000],
+    )
+
+    log.info("Generating ICP update recommendations from briefing …")
+    response = client.messages.create(
+        model="claude-opus-4-8",
+        max_tokens=1024,
+        thinking={"type": "adaptive"},
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    raw = next((b.text for b in response.content if b.type == "text"), None)
+    if not raw:
+        log.warning("Recommendations: no text output from Claude")
+        return None
+
+    try:
+        recommendations = json.loads(raw.strip())
+        log.info("Recommendations generated successfully")
+        return recommendations
+    except json.JSONDecodeError as e:
+        log.warning(f"Recommendations: could not parse JSON response: {e}")
+        return None
+
+
 def synthesize(items, api_key=None):
     """
     Take raw intelligence items and produce a structured briefing string.

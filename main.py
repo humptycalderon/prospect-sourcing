@@ -28,10 +28,47 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # Local imports (after dotenv so env is ready)
-from config import GITHUB_QUERIES, HN_QUERIES, MIN_SCORE_THRESHOLD
+from config import GITHUB_QUERIES, HN_QUERIES, MIN_SCORE_THRESHOLD, DESCRIPTION_KEYWORDS, INTENT_KEYWORDS
 from sources import github_source, hn_source, producthunt_source
 from enrichment import hunter_enricher, notion_push
 from scoring import filter_and_rank
+
+
+def _load_overrides():
+    """Merge icp_overrides.json into config at runtime. Returns (github_queries, hn_queries)."""
+    import json
+    override_path = os.path.join(os.path.dirname(__file__), "icp_overrides.json")
+    if not os.path.exists(override_path):
+        return list(GITHUB_QUERIES), list(HN_QUERIES)
+
+    try:
+        with open(override_path, encoding="utf-8") as f:
+            ov = json.load(f)
+    except Exception as e:
+        log.warning(f"Could not load icp_overrides.json: {e} — using base config")
+        return list(GITHUB_QUERIES), list(HN_QUERIES)
+
+    gh_queries = list(GITHUB_QUERIES) + [q for q in ov.get("extra_github_queries", []) if q not in GITHUB_QUERIES]
+    hn_queries = list(HN_QUERIES) + [q for q in ov.get("extra_hn_queries", []) if q not in HN_QUERIES]
+
+    extra_kw = ov.get("extra_description_keywords", {})
+    if extra_kw:
+        DESCRIPTION_KEYWORDS.update(extra_kw)
+        log.info(f"Overrides: added {len(extra_kw)} description keywords")
+
+    extra_intent = ov.get("extra_intent_keywords", {})
+    if extra_intent:
+        INTENT_KEYWORDS.update(extra_intent)
+        log.info(f"Overrides: added {len(extra_intent)} intent keywords")
+
+    if ov.get("extra_github_queries"):
+        log.info(f"Overrides: added {len(ov['extra_github_queries'])} GitHub queries")
+    if ov.get("extra_hn_queries"):
+        log.info(f"Overrides: added {len(ov['extra_hn_queries'])} HN queries")
+    if ov.get("_update_reason"):
+        log.info(f"Overrides last updated: {ov.get('_last_updated')} — {ov['_update_reason']}")
+
+    return gh_queries, hn_queries
 
 OUTPUT_COLUMNS = [
     "score",
@@ -102,11 +139,13 @@ def main():
     if existing_logins:
         log.info(f"Deduplication: loaded {len(existing_logins)} existing logins from {args.dedupe}")
 
+    github_queries, hn_queries = _load_overrides()
+
     all_prospects = []
 
     # --- GitHub ---
     if not args.no_github:
-        gh_prospects = github_source.run(GITHUB_QUERIES, max_per_query=30)
+        gh_prospects = github_source.run(github_queries, max_per_query=30)
         all_prospects.extend(gh_prospects)
         log.info(f"GitHub: {len(gh_prospects)} prospects collected")
     else:
@@ -114,7 +153,7 @@ def main():
 
     # --- Hacker News ---
     if not args.no_hn:
-        hn_prospects = hn_source.run(HN_QUERIES, min_points=5, max_per_query=20)
+        hn_prospects = hn_source.run(hn_queries, min_points=5, max_per_query=20)
         all_prospects.extend(hn_prospects)
         log.info(f"HN: {len(hn_prospects)} prospects collected")
     else:

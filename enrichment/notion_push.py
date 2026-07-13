@@ -17,19 +17,20 @@ NOTION_VERSION = "2022-06-28"
 
 # Properties to ensure exist in the Notion database and their types
 REQUIRED_PROPERTIES = {
-    "Website":        {"url": {}},
-    "Score":          {"number": {"format": "number"}},
-    "Source":         {"select": {}},
-    "Contact Name":   {"rich_text": {}},
-    "Contact Title":  {"rich_text": {}},
-    "Contact Email":  {"email": {}},
+    "Website":          {"url": {}},
+    "Score":            {"number": {"format": "number"}},
+    "Source":           {"select": {}},
+    "Contact Name":     {"rich_text": {}},
+    "Contact Title":    {"rich_text": {}},
+    "Contact Email":    {"email": {}},
     "Contact LinkedIn": {"url": {}},
-    "Description":    {"rich_text": {}},
-    "Location":       {"rich_text": {}},
-    "Topics":         {"multi_select": {}},
-    "GitHub URL":     {"url": {}},
-    "Score Reasons":  {"rich_text": {}},
-    "Status":         {"select": {}},
+    "Twitter":          {"url": {}},
+    "Description":      {"rich_text": {}},
+    "Location":         {"rich_text": {}},
+    "Topics":           {"multi_select": {}},
+    "GitHub URL":       {"url": {}},
+    "Score Reasons":    {"rich_text": {}},
+    "Status":           {"select": {}},
 }
 
 
@@ -128,6 +129,9 @@ def _prospect_to_page(prospect, db_id):
         props["Contact Email"] = {"email": prospect["contact_email"]}
     if prospect.get("contact_linkedin"):
         props["Contact LinkedIn"] = {"url": prospect["contact_linkedin"]}
+    if prospect.get("twitter"):
+        handle = prospect["twitter"].lstrip("@")
+        props["Twitter"] = {"url": f"https://x.com/{handle}"}
     if topics:
         props["Topics"] = {"multi_select": [{"name": t[:100]} for t in topics[:10]]}
 

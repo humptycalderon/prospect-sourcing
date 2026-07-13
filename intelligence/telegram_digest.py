@@ -81,6 +81,63 @@ def _split(text, max_len=MAX_MSG_LEN):
     return chunks
 
 
+def push_recommendations(recommendations, run_date=None, token=None, chat_id=None):
+    """
+    Send ICP search criteria recommendations to Telegram as an actionable message.
+    The user replies to the Cloudflare Worker bot to approve or modify.
+    """
+    token = token or os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID")
+
+    if not token or not chat_id:
+        log.error("Telegram credentials not set — skipping recommendations delivery")
+        return False
+
+    from datetime import date
+    run_date = run_date or date.today().isoformat()
+
+    lines = [f"🎯 *ICP Update Recommendations — {run_date}*"]
+    lines.append(f"_Based on this week's market signals_\n{'─' * 30}")
+
+    reason = recommendations.get("_update_reason", "")
+    if reason:
+        lines.append(f"*Signal:* {reason}\n")
+
+    gh_queries = recommendations.get("extra_github_queries", [])
+    hn_queries = recommendations.get("extra_hn_queries", [])
+    desc_kw = recommendations.get("extra_description_keywords", {})
+    intent_kw = recommendations.get("extra_intent_keywords", {})
+
+    has_changes = any([gh_queries, hn_queries, desc_kw, intent_kw])
+
+    if not has_changes:
+        lines.append("_No updates recommended this week — current criteria look strong._")
+    else:
+        if gh_queries:
+            lines.append("*New GitHub Queries:*")
+            for q in gh_queries:
+                lines.append(f"  • `{q}`")
+        if hn_queries:
+            lines.append("*New HN Queries:*")
+            for q in hn_queries:
+                lines.append(f"  • `{q}`")
+        if desc_kw:
+            lines.append("*New Description Keywords:*")
+            for kw, w in desc_kw.items():
+                lines.append(f"  • `{kw}` (weight: {w})")
+        if intent_kw:
+            lines.append("*New Intent Keywords:*")
+            for kw, w in intent_kw.items():
+                lines.append(f"  • `{kw}` (weight: {w})")
+
+        lines.append("\n─────────────────")
+        lines.append("Reply *APPLY* to add these to the pipeline, or tell me what to change.")
+        lines.append("Prospect sourcing will run after you confirm.")
+
+    msg = "\n".join(lines)
+    return _send(token, chat_id, msg)
+
+
 def push(briefing, run_date=None, token=None, chat_id=None):
     """
     Send the briefing to Telegram. Long briefings are split across messages.

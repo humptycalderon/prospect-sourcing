@@ -1,0 +1,11 @@
+name = "onto-icp-bot"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Non-secret vars can go here. Secrets are set via `wrangler secret put` or the dashboard.
+# GITHUB_OWNER and GITHUB_REPO are not sensitive so they live here.
+GITHUB_OWNER = "humptycalderon"
+GITHUB_REPO = "prospect-sourcing"
+GITHUB_WORKFLOW_ID = "weekly-pipeline.yml"

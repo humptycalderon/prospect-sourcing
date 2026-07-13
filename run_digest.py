@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 
 from intelligence.sources import hn_intel, arxiv_intel, rss_intel
 from intelligence import synthesizer, notion_digest, telegram_digest
+from config import GITHUB_QUERIES, HN_QUERIES, DESCRIPTION_KEYWORDS
 
 
 def main():
@@ -102,6 +103,22 @@ def main():
         telegram_digest.push(briefing, run_date=today)
     else:
         log.info("Telegram delivery: skipped")
+
+    # --- ICP Recommendations ---
+    log.info("Generating ICP search criteria recommendations …")
+    recommendations = synthesizer.generate_recommendations(
+        briefing=briefing,
+        github_queries=list(GITHUB_QUERIES),
+        hn_queries=list(HN_QUERIES),
+        existing_keywords=DESCRIPTION_KEYWORDS,
+    )
+
+    if recommendations and not args.no_telegram:
+        telegram_digest.push_recommendations(recommendations, run_date=today)
+    elif recommendations:
+        import json
+        print("\n--- ICP RECOMMENDATIONS ---")
+        print(json.dumps(recommendations, indent=2))
 
 
 if __name__ == "__main__":

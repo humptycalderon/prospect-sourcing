@@ -1,19 +1,74 @@
 name: Weekly Prospect Sourcing & Market Digest
 
 on:
+  # Digest: Saturday 8 PM EDT (Sunday 00:00 UTC) — runs first, generates recommendations
+  # Sourcing: triggered by the Telegram bot after approval, or falls back Tuesday 8 AM EDT
   schedule:
-    - cron: '0 10 * * 1'   # 6:00 AM EDT (UTC-4) every Monday
-  workflow_dispatch:         # allows manual trigger from GitHub UI
+    - cron: '0 0 * * 0'    # Sunday 00:00 UTC = Saturday 8 PM EDT — digest
+    - cron: '0 12 * * 2'   # Tuesday 12:00 UTC = Tuesday 8 AM EDT  — sourcing fallback
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'Which job to run'
+        required: false
+        default: 'sourcing'
+        type: choice
+        options:
+          - sourcing
+          - digest
+          - both
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
 
-  # ── Job 1: Prospect Sourcing (6:00 AM EDT) ──────────────────────────────
+  # ── Market Intel Digest (Saturday night) ─────────────────────────────────
+  market-digest:
+    name: Market Intel Digest
+    runs-on: ubuntu-latest
+    # Run on Saturday-night schedule, on manual dispatch requesting digest or both,
+    # or never on the Tuesday fallback schedule (that's sourcing only)
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 0 * * 0') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'digest' || github.event.inputs.job == 'both'))
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run market digest + generate recommendations
+        run: python run_digest.py
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN:       ${{ secrets.NOTION_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Upload digest as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ github.run_id }}
+          path: digest_*.md
+          retention-days: 90
+
+  # ── Prospect Sourcing (bot-triggered or Tuesday fallback) ─────────────────
   prospect-sourcing:
     name: Prospect Sourcing
     runs-on: ubuntu-latest
+    # Run when: bot triggers via workflow_dispatch (sourcing or both), or Tuesday fallback schedule
+    if: |
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'sourcing' || github.event.inputs.job == 'both')) ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 12 * * 2')
 
     steps:
       - name: Checkout repo
@@ -44,38 +99,4 @@ jobs:
         with:
           name: prospects-${{ github.run_id }}
           path: prospects_*.csv
-          retention-days: 90
-
-  # ── Job 2: Market Intel Digest (runs after sourcing completes) ───────────
-  market-digest:
-    name: Market Intel Digest
-    runs-on: ubuntu-latest
-    needs: prospect-sourcing   # waits for Job 1 to finish
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run market digest
-        run: python run_digest.py
-        env:
-          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
-          NOTION_TOKEN:       ${{ secrets.NOTION_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
-
-      - name: Upload digest as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: digest-${{ github.run_id }}
-          path: digest_*.md
           retention-days: 90
