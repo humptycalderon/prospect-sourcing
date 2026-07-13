@@ -1,7 +1,7 @@
 {
   "_comment": "Weekly ICP overrides managed by the Telegram approval bot. Merged with config.py at runtime.",
-  "_last_updated": null,
-  "_update_reason": null,
+  "_last_updated": "2026-07-13",
+  "_update_reason": "User approved recommended updates as-is",
   "extra_github_queries": [],
   "extra_hn_queries": [],
   "extra_description_keywords": {},
