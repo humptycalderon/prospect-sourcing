@@ -157,4 +157,4 @@ SCORE_WEIGHTS = {
 MAX_SCORE = 100
 
 # Minimum score to include in output
-MIN_SCORE_THRESHOLD = 40
+MIN_SCORE_THRESHOLD = 35

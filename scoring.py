@@ -129,16 +129,18 @@ def score_prospect(p):
         raw += intent_pts
         reasons.append(f"intent keywords ({', '.join(intent_kws)}): +{intent_pts}")
 
-    # Recency penalty: stale repos score progressively lower
-    if days > 365:
-        raw = round(raw * 0.50)
-        reasons.append(f"stale repo ({days}d): score halved")
-    elif days > 180:
-        raw = round(raw * 0.70)
-        reasons.append(f"stale repo ({days}d): -30%")
-    elif days > 90:
-        raw = round(raw * 0.85)
-        reasons.append(f"aging repo ({days}d): -15%")
+    # Recency penalty: only applies to GitHub prospects with a real push date.
+    # HN and Product Hunt prospects have no push date; 9999 is the "unknown" sentinel.
+    if days < 9999:
+        if days > 365:
+            raw = round(raw * 0.50)
+            reasons.append(f"stale repo ({days}d): score halved")
+        elif days > 180:
+            raw = round(raw * 0.70)
+            reasons.append(f"stale repo ({days}d): -30%")
+        elif days > 90:
+            raw = round(raw * 0.85)
+            reasons.append(f"aging repo ({days}d): -15%")
 
     # Normalize to 0–100
     score = min(round((raw / MAX_SCORE) * 100), 100)

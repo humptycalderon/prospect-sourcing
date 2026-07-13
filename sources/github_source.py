@@ -85,9 +85,10 @@ def search_repos(query, max_results=30, orgs_only=True):
     """Search GitHub repos and return list of repo records.
     orgs_only=True filters to Organization-owned repos only — better
     contact surface for Hunter.io enrichment downstream.
+    Individual users are included when orgs_only=False, then filtered
+    by follower count in run() after org details are fetched.
     """
-    # Append GitHub qualifier to bias results toward org-owned repos
-    full_query = f"{query} fork:false" + (" org:*" if not orgs_only else "")
+    full_query = f"{query} fork:false"
     params = {
         "q": full_query,
         "sort": "updated",
@@ -101,11 +102,8 @@ def search_repos(query, max_results=30, orgs_only=True):
     repos = []
     for item in data.get("items", []):
         owner_type = item["owner"]["type"]  # "Organization" | "User"
-        # Keep all orgs; keep individual users only as candidates (filtered later by follower count)
         if orgs_only and owner_type != "Organization":
             continue
-        if not orgs_only and owner_type == "User":
-            pass  # follower count checked after fetch_org_details
         repos.append({
             "repo_name":       item.get("full_name"),
             "repo_description": item.get("description") or "",
