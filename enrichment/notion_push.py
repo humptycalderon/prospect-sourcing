@@ -67,9 +67,9 @@ def _ensure_schema(db_id, token):
     log.info("Notion schema: updated successfully")
 
 
-def _get_existing_websites(db_id, token):
-    """Return set of Website URLs already in the database (for dedup)."""
-    existing = set()
+def _get_existing_pages(db_id, token):
+    """Return dict mapping website URL → page_id for all existing records."""
+    existing = {}
     cursor = None
     while True:
         body = {"page_size": 100}
@@ -88,11 +88,28 @@ def _get_existing_websites(db_id, token):
             props = page.get("properties", {})
             url_prop = props.get("Website", {}).get("url")
             if url_prop:
-                existing.add(url_prop.lower().rstrip("/"))
+                existing[url_prop.lower().rstrip("/")] = page["id"]
         if not data.get("has_more"):
             break
         cursor = data.get("next_cursor")
     return existing
+
+
+def _contact_patch(prospect):
+    """Build a properties patch dict containing only non-empty contact fields."""
+    props = {}
+    if prospect.get("contact_email"):
+        props["Contact Email"] = {"email": prospect["contact_email"]}
+    if prospect.get("contact_name"):
+        props["Contact Name"] = {"rich_text": _text(prospect["contact_name"])}
+    if prospect.get("contact_title"):
+        props["Contact Title"] = {"rich_text": _text(prospect["contact_title"])}
+    if prospect.get("contact_linkedin"):
+        props["Contact LinkedIn"] = {"url": prospect["contact_linkedin"]}
+    if prospect.get("twitter"):
+        handle = prospect["twitter"].lstrip("@")
+        props["Twitter"] = {"url": f"https://x.com/{handle}"}
+    return props
 
 
 def _text(value):
@@ -109,7 +126,7 @@ def _prospect_to_page(prospect, db_id):
 
     props = {
         "Name": {"title": _text(name)},
-        "Score": {"number": prospect.get("score") or 0},
+        "Score": {"number": int(prospect.get("score") or 0)},
         "Source": {"select": {"name": prospect.get("source", "github").capitalize()}},
         "Description": {"rich_text": _text(prospect.get("description") or "")},
         "Location": {"rich_text": _text(prospect.get("location") or "")},
@@ -155,15 +172,31 @@ def push(prospects, db_id=None, token=None):
 
     _ensure_schema(db_id, token)
 
-    log.info("Notion: fetching existing records for deduplication …")
-    existing_urls = _get_existing_websites(db_id, token)
-    log.info(f"Notion: {len(existing_urls)} existing records found")
+    log.info("Notion: fetching existing records …")
+    existing_pages = _get_existing_pages(db_id, token)
+    log.info(f"Notion: {len(existing_pages)} existing records found")
 
-    pushed, skipped = 0, 0
+    pushed = updated = skipped = 0
     for p in prospects:
         website = (p.get("website") or "").lower().rstrip("/")
-        if website and website in existing_urls:
-            skipped += 1
+
+        if website and website in existing_pages:
+            # Record exists — patch contact fields if we have new data
+            patch = _contact_patch(p)
+            if patch:
+                r = requests.patch(
+                    f"{NOTION_API}/pages/{existing_pages[website]}",
+                    headers=_headers(token),
+                    json={"properties": patch},
+                )
+                if r.status_code == 200:
+                    updated += 1
+                    log.debug(f"  updated contact: {p.get('name')}")
+                else:
+                    log.warning(f"  update failed ({r.status_code}): {p.get('name')} — {r.text[:200]}")
+                time.sleep(0.35)
+            else:
+                skipped += 1
             continue
 
         page_body = _prospect_to_page(p, db_id)
@@ -174,12 +207,12 @@ def push(prospects, db_id=None, token=None):
         )
         if r.status_code == 200:
             pushed += 1
-            existing_urls.add(website)
+            existing_pages[website] = None
             log.debug(f"  pushed: {p.get('name')}")
         else:
             log.warning(f"  failed ({r.status_code}): {p.get('name')} — {r.text[:200]}")
 
         time.sleep(0.35)  # Notion API: 3 req/sec limit
 
-    log.info(f"Notion: pushed {pushed}, skipped {skipped} duplicates")
+    log.info(f"Notion: pushed {pushed} new, updated {updated} contacts, skipped {skipped}")
     return pushed, skipped
