@@ -32,6 +32,7 @@ from config import GITHUB_QUERIES, HN_QUERIES, MIN_SCORE_THRESHOLD, DESCRIPTION_
 from sources import github_source, hn_source, producthunt_source
 from enrichment import hunter_enricher, notion_push
 from scoring import filter_and_rank
+from outreach import personalizer, notion_outreach
 
 
 def _load_overrides():
@@ -131,6 +132,7 @@ def main():
     parser.add_argument("--no-ph", action="store_true", help="Skip Product Hunt source")
     parser.add_argument("--no-enrich", action="store_true", help="Skip Hunter.io enrichment")
     parser.add_argument("--no-notion", action="store_true", help="Skip Notion CRM push")
+    parser.add_argument("--no-outreach", action="store_true", help="Skip outreach draft generation")
     parser.add_argument("--out", default=f"prospects_{date.today()}.csv", help="Output CSV path")
     parser.add_argument("--dedupe", default=None, help="Path to existing CSV; skip matching logins")
     args = parser.parse_args()
@@ -207,9 +209,35 @@ def main():
     if not args.no_notion:
         notion_db_id = os.getenv("NOTION_DATABASE_ID", "35acd830bd3580d7aabffaae480073c4")
         pushed, skipped = notion_push.push(ranked, db_id=notion_db_id)
-        print(f"Notion: {pushed} new prospects pushed, {skipped} duplicates skipped")
+        print(f"Notion: {pushed} new prospects pushed, {skipped} contacts updated")
     else:
         log.info("Notion push: skipped")
+
+    # --- Outreach draft generation ---
+    if not args.no_outreach and not args.no_notion:
+        import glob
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Load latest digest for positioning context
+        digest_files = sorted(glob.glob(os.path.join(base_dir, "digest_*.md")), reverse=True)
+        digest_context = ""
+        if digest_files:
+            with open(digest_files[0], encoding="utf-8") as f:
+                digest_context = f.read()
+            log.info(f"Outreach: loaded digest context from {digest_files[0]}")
+
+        # Generate drafts for top prospects without existing drafts (score >= 50)
+        top = [p for p in ranked if p.get("score", 0) >= 50][:20]
+        if top:
+            log.info(f"Outreach: generating drafts for {len(top)} prospects …")
+            results = personalizer.generate_batch(top, digest_context=digest_context)
+            succeeded = sum(1 for _, d in results if d)
+            log.info(f"Outreach: {succeeded}/{len(top)} drafts generated")
+            notion_outreach.push_drafts(results)
+        else:
+            log.info("Outreach: no prospects above score 50 — skipping draft generation")
+    elif args.no_outreach:
+        log.info("Outreach draft generation: skipped")
 
     # Print summary table to terminal
     print(f"\n{'─'*80}")

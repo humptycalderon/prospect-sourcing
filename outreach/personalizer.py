@@ -98,7 +98,7 @@ def generate(prospect, digest_context="", api_key=None):
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-6",
+            model="claude-opus-4-8",
             max_tokens=512,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
