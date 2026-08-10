@@ -1,15 +1,9 @@
 {
   "_comment": "Weekly ICP overrides managed by the Telegram approval bot. Merged with config.py at runtime.",
-  "_last_updated": "2026-08-03",
-  "_update_reason": "construction AI teams building ad hoc eval pipelines per r/MachineLearning; added gaming AI companies per user request",
-  "extra_github_queries": [
-    "construction AI model evaluation",
-    "gaming AI model evaluation"
-  ],
-  "extra_hn_queries": [
-    "construction ML evaluation",
-    "gaming ML evaluation"
-  ],
+  "_last_updated": "2026-08-10",
+  "_update_reason": "Reset stale construction overrides after gaming pivot applied to config.py",
+  "extra_github_queries": [],
+  "extra_hn_queries": [],
   "extra_description_keywords": {},
   "extra_intent_keywords": {},
   "min_score_override": null
