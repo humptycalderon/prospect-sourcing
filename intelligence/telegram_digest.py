@@ -18,14 +18,20 @@ MAX_MSG_LEN = 4000  # leave headroom below the 4096 hard limit
 
 
 def _send(token, chat_id, text, parse_mode="Markdown"):
-    """Send a single message. Returns True on success."""
+    """Send a single message. Falls back to plain text on parse error. Returns True on success."""
     url = f"{TELEGRAM_API}/bot{token}/sendMessage"
-    resp = requests.post(url, json={
+    payload = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": parse_mode,
         "disable_web_page_preview": True,
-    }, timeout=15)
+    }
+    resp = requests.post(url, json=payload, timeout=15)
+
+    if resp.status_code == 400 and parse_mode:
+        log.warning(f"Telegram Markdown parse failed — retrying as plain text: {resp.text[:120]}")
+        payload.pop("parse_mode")
+        resp = requests.post(url, json=payload, timeout=15)
 
     if resp.status_code != 200:
         log.error(f"Telegram send failed ({resp.status_code}): {resp.text[:200]}")
@@ -37,7 +43,7 @@ def _markdown_to_telegram(text):
     """
     Convert Claude's markdown to Telegram-flavored markdown.
     Telegram supports: *bold*, _italic_, `code`, ```pre```, [text](url)
-    It does NOT support ## headings — convert those to bold lines.
+    It does NOT support ## headings or **double-asterisk bold**.
     """
     lines = []
     for line in text.split("\n"):
@@ -53,7 +59,12 @@ def _markdown_to_telegram(text):
             lines.append(f"• {bullet_text}")
         else:
             lines.append(line)
-    return "\n".join(lines)
+    result = "\n".join(lines)
+    # Convert **bold** → *bold* (Telegram Markdown uses single asterisk)
+    result = re.sub(r"\*\*(.+?)\*\*", r"*\1*", result)
+    # Convert __text__ → _text_ (Telegram italic)
+    result = re.sub(r"__(.+?)__", r"_\1_", result)
+    return result
 
 
 def _split(text, max_len=MAX_MSG_LEN):
